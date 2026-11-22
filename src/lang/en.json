@@ -1654,5 +1654,7 @@
     "forkOpRegex": "matches regex",
     "forkNewBadge": "NEW",
     "forkPeerCheck": "Peer check",
-    "forkThisInstance": "This instance"
+    "forkThisInstance": "This instance",
+    "forkSkipPeer": "Do not ask the peer to confirm failures",
+    "forkSkipPeerDescription": "Failures of this monitor alert at once, without a second check from the peer instance. Use it when the peer cannot reach the target."
 }

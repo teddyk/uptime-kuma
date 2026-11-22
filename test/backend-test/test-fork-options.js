@@ -20,14 +20,15 @@ const {
     formatHttpDetailText,
     attachPeerResult,
 } = require("../../server/http-detail");
-const { UP, DOWN } = require("../../src/util");
+const peerConfirm = require("../../server/peer-confirm");
+const { UP, DOWN, PENDING } = require("../../src/util");
 const TestDB = require("../mock-testdb");
 
 const testDb = new TestDB("./data/test-fork-options");
 
 describe("Fork options: parsing and validation", () => {
     test("parse gives the empty defaults for missing or broken values", () => {
-        const empty = { checkIps: [], checkDns: false, headerConditions: [] };
+        const empty = { checkIps: [], checkDns: false, skipPeer: false, headerConditions: [] };
         assert.deepStrictEqual(parseForkOptions(null), empty);
         assert.deepStrictEqual(parseForkOptions("not json"), empty);
         assert.deepStrictEqual(parseForkOptions("[]"), empty);
@@ -60,6 +61,7 @@ describe("Fork options: parsing and validation", () => {
         assert.deepStrictEqual(clean, {
             checkIps: ["203.0.113.10"],
             checkDns: false,
+            skipPeer: false,
             headerConditions: [
                 { name: "x-cache", operator: "contains", value: "HIT" },
                 { name: "age", operator: "exists", value: "" },
@@ -71,6 +73,7 @@ describe("Fork options: parsing and validation", () => {
         assert.deepStrictEqual(validateForkOptions(undefined), {
             checkIps: [],
             checkDns: false,
+            skipPeer: false,
             headerConditions: [],
         });
         assert.throws(() => validateForkOptions({ checkIps: ["example.com"] }), /Not a valid IP address/);
@@ -355,6 +358,40 @@ describe("Fork options: HTTP checks", () => {
         assert.strictEqual(result.status, UP, result.msg);
         assert.strictEqual(result.msg, "200 - OK");
         assert.strictEqual(hosts.length, 1);
+    });
+
+    test("skipPeer: the peer is not asked and the failure stays DOWN", async () => {
+        // Nothing listens on port 1: an asked peer would be unreachable and hold the beat as PENDING
+        process.env.UPTIME_KUMA_PEER_URL = "http://127.0.0.1:1";
+        process.env.UPTIME_KUMA_PEER_TOKEN = "test-token";
+        try {
+            const store = async (forkOptions) => {
+                const bean = R.dispense("monitor");
+                bean.name = "skip-peer-test";
+                bean.type = "http";
+                bean.url = `http://127.0.0.1:${port}/`;
+                bean.user_id = userID;
+                bean.timeout = 1;
+                bean.accepted_statuscodes_json = '["200-299"]';
+                bean.fork_options = JSON.stringify(validateForkOptions(forkOptions));
+                await R.store(bean);
+                return { id: bean.id, name: bean.name, timeout: 1 };
+            };
+
+            const skipped = { status: DOWN, msg: "local failure", response: null };
+            const held = await peerConfirm.confirmDown(await store({ skipPeer: true }), skipped, 0);
+            assert.strictEqual(held, 0);
+            assert.deepStrictEqual(skipped, { status: DOWN, msg: "local failure", response: null });
+
+            const asked = { status: DOWN, msg: "local failure", response: null };
+            const heldAsked = await peerConfirm.confirmDown(await store({}), asked, 0);
+            assert.strictEqual(heldAsked, 1);
+            assert.strictEqual(asked.status, PENDING);
+            assert.match(asked.msg, /peer unreachable/);
+        } finally {
+            delete process.env.UPTIME_KUMA_PEER_URL;
+            delete process.env.UPTIME_KUMA_PEER_TOKEN;
+        }
     });
 
     test("upside down mode is applied once, on the combined result", async () => {

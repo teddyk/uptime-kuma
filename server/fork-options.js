@@ -8,7 +8,7 @@ const MAX_TEXT = 500;
 /**
  * Read the fork options of a monitor. Never throws: anything unreadable gives the empty defaults.
  * @param {string|object|null|undefined} raw value of monitor.fork_options, or an already parsed object
- * @returns {{checkIps: string[], checkDns: boolean, headerConditions: {name: string, operator: string, value: string}[]}} options
+ * @returns {{checkIps: string[], checkDns: boolean, skipPeer: boolean, headerConditions: {name: string, operator: string, value: string}[]}} options
  */
 function parseForkOptions(raw) {
     let data = raw;
@@ -20,11 +20,12 @@ function parseForkOptions(raw) {
         }
     }
     if (!data || typeof data !== "object") {
-        return { checkIps: [], checkDns: false, headerConditions: [] };
+        return { checkIps: [], checkDns: false, skipPeer: false, headerConditions: [] };
     }
     return {
         checkIps: Array.isArray(data.checkIps) ? data.checkIps.filter((ip) => net.isIP(ip) !== 0) : [],
         checkDns: Boolean(data.checkDns),
+        skipPeer: Boolean(data.skipPeer),
         headerConditions: Array.isArray(data.headerConditions)
             ? data.headerConditions.filter((c) => c && c.name && HEADER_OPERATORS.includes(c.operator))
             : [],
@@ -39,7 +40,7 @@ function parseForkOptions(raw) {
  */
 function validateForkOptions(input) {
     if (input === undefined || input === null) {
-        return { checkIps: [], checkDns: false, headerConditions: [] };
+        return { checkIps: [], checkDns: false, skipPeer: false, headerConditions: [] };
     }
     if (typeof input !== "object") {
         throw new Error("Invalid fork options");
@@ -89,7 +90,7 @@ function validateForkOptions(input) {
     if (checkIps.length > MAX_ITEMS || headerConditions.length > MAX_ITEMS) {
         throw new Error(`At most ${MAX_ITEMS} IPs and ${MAX_ITEMS} header conditions are allowed`);
     }
-    return { checkIps, checkDns: Boolean(input.checkDns), headerConditions };
+    return { checkIps, checkDns: Boolean(input.checkDns), skipPeer: Boolean(input.skipPeer), headerConditions };
 }
 
 /**

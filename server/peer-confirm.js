@@ -3,6 +3,7 @@ const axios = require("axios");
 const { R } = require("redbean-node");
 const { log, UP, DOWN, PENDING } = require("../src/util");
 const { attachPeerResult } = require("./http-detail");
+const { parseForkOptions } = require("./fork-options");
 
 /**
  * Monitor types the peer cannot check for us: they depend on state of the main host or the main DB.
@@ -133,7 +134,8 @@ async function askPeer(row, timeout) {
  */
 async function confirmDown(monitor, bean, held) {
     const row = await R.getRow("SELECT * FROM monitor WHERE id = ?", [monitor.id]);
-    if (!isSupported(row)) {
+    // The row is read on every call, so the per-monitor opt-out applies without a restart
+    if (!isSupported(row) || parseForkOptions(row.fork_options).skipPeer) {
         return held;
     }
     const answer = await askPeer(row, monitor.timeout);

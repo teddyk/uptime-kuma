@@ -1890,6 +1890,22 @@
                                 </div>
                             </div>
 
+                            <div v-if="monitor.forkOptions && monitor.type !== 'group'" class="my-3 form-check">
+                                <input
+                                    id="forkSkipPeer"
+                                    v-model="monitor.forkOptions.skipPeer"
+                                    class="form-check-input"
+                                    type="checkbox"
+                                />
+                                <label class="form-check-label" for="forkSkipPeer">
+                                    {{ $t("forkSkipPeer") }}
+                                    <span class="badge bg-danger ms-1">{{ $t("forkNewBadge") }}</span>
+                                </label>
+                                <div class="form-text">
+                                    {{ $t("forkSkipPeerDescription") }}
+                                </div>
+                            </div>
+
                             <div v-if="monitor.type === 'gamedig'" class="my-3 form-check">
                                 <input
                                     id="gamedig-guess-port"
@@ -3478,7 +3494,7 @@ const monitorDefaults = {
     rabbitmqUsername: "",
     rabbitmqPassword: "",
     conditions: [],
-    forkOptions: { checkIps: [], checkDns: false, headerConditions: [] },
+    forkOptions: { checkIps: [], checkDns: false, headerConditions: [], skipPeer: false },
     system_service_name: "",
     sshAuthMethod: "password",
     ntpStratumThreshold: 5,
@@ -4194,7 +4210,7 @@ message HealthCheckResponse {
                     packetSize: 56,
                     ping_per_request_timeout: 2,
                     // Fresh copy, so the shared defaults object is never mutated
-                    forkOptions: { checkIps: [], checkDns: false, headerConditions: [] },
+                    forkOptions: { checkIps: [], checkDns: false, headerConditions: [], skipPeer: false },
                 };
                 this.checkIpsText = "";
 
@@ -4227,6 +4243,7 @@ message HealthCheckResponse {
                         this.monitor.forkOptions = {
                             checkIps: this.monitor.forkOptions?.checkIps ?? [],
                             checkDns: this.monitor.forkOptions?.checkDns ?? false,
+                            skipPeer: this.monitor.forkOptions?.skipPeer ?? false,
                             headerConditions: this.monitor.forkOptions?.headerConditions ?? [],
                         };
                         this.checkIpsText = this.monitor.forkOptions.checkIps.join("\n");

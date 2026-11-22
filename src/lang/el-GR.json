@@ -1714,5 +1714,7 @@
     "forkOpRegex": "ταιριάζει με regex",
     "forkNewBadge": "ΝΕΟ",
     "forkPeerCheck": "Έλεγχος peer",
-    "forkThisInstance": "Αυτό το instance"
+    "forkThisInstance": "Αυτό το instance",
+    "forkSkipPeer": "Χωρίς επιβεβαίωση αποτυχιών από τον peer",
+    "forkSkipPeerDescription": "Οι αποτυχίες αυτής της παρακολούθησης ειδοποιούν αμέσως, χωρίς δεύτερο έλεγχο από το peer instance. Χρήσιμο όταν ο peer δεν φτάνει τον στόχο."
 }
