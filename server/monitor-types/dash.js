@@ -122,7 +122,8 @@ function fillTemplate(template, values) {
                 return match;
             }
             const value = String(values[identifier]);
-            return width ? value.padStart(Number(width), "0") : value;
+            // A manifest is remote input: cap the width so it cannot ask for a huge string
+            return width ? value.padStart(Math.min(Number(width), 20), "0") : value;
         }
     );
 }

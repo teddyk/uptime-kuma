@@ -93,6 +93,10 @@ class StreamCheck {
      * @returns {Promise<import("axios").AxiosResponse>} Response whose data is a readable stream
      */
     async open(url, { headers = {}, range = false } = {}) {
+        // Playlist and manifest entries are remote input: only ever follow them over http(s)
+        if (!/^https?:$/.test(new URL(url).protocol)) {
+            throw new Error(`unsupported URL scheme ${new URL(url).protocol}`);
+        }
         const response = await axios.get(url, {
             responseType: "stream",
             headers: {

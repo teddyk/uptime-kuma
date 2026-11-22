@@ -12,7 +12,7 @@ const brotliDecompress = promisify(zlib.brotliDecompress);
  */
 const HTTP_DETAIL_PREFIX = "kd1:";
 
-const SENSITIVE_HEADERS = new Set(["authorization", "proxy-authorization", "cookie", "set-cookie"]);
+const SENSITIVE_HEADERS = /authorization|cookie|token|secret|password|api-?key|signature/i;
 
 /**
  * Copy headers to a plain object with lowercase names, string values and sensitive values masked.
@@ -26,7 +26,7 @@ function sanitizeHeaders(headers) {
             continue;
         }
         const key = name.toLowerCase();
-        if (SENSITIVE_HEADERS.has(key)) {
+        if (SENSITIVE_HEADERS.test(key)) {
             result[key] = "***";
         } else if (Array.isArray(value)) {
             result[key] = value.join(", ");
