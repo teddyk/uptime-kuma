@@ -333,6 +333,49 @@ describe("KumaClient requests", () => {
         await assert.rejects(client.connect(), /No greeting from/);
     });
 
+    it("waits longer for a login than for other answers", async () => {
+        const httpServer = createServer();
+        const io = new Server(httpServer);
+        io.on("connection", (socket) => {
+            socket.emit("info", {});
+            socket.on("login", (data, callback) => setTimeout(() => callback({ ok: true }), 400));
+        });
+        await new Promise((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+        const client = new KumaClient({
+            url: `http://127.0.0.1:${httpServer.address().port}`,
+            username: "a",
+            password: "b",
+            timeoutMs: 200,
+        });
+        cleanups.push(async () => {
+            client.close();
+            await new Promise((resolve) => io.close(resolve));
+        });
+        await client.connect();
+    });
+
+    it("names the login when the login answer never comes", async () => {
+        const httpServer = createServer();
+        const io = new Server(httpServer);
+        io.on("connection", (socket) => {
+            socket.emit("info", {});
+            socket.on("login", () => {});
+        });
+        await new Promise((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+        const client = new KumaClient({
+            url: `http://127.0.0.1:${httpServer.address().port}`,
+            username: "a",
+            password: "b",
+            timeoutMs: 200,
+            loginTimeoutMs: 300,
+        });
+        cleanups.push(async () => {
+            client.close();
+            await new Promise((resolve) => io.close(resolve));
+        });
+        await assert.rejects(client.connect(), /login timed out after 300 ms/);
+    });
+
     it("rejects before connect() was called", async () => {
         const client = new KumaClient({ url: "http://127.0.0.1:1", username: "a", password: "b" });
         await assert.rejects(client.getMonitor(1), /Not connected/);

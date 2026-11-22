@@ -54,6 +54,10 @@ function normalizeLive(beat) {
     };
 }
 
+// Kuma answers a login only after it pushed every list and the recent beats of every monitor.
+// On a server with many monitors that takes far longer than any other answer.
+const LOGIN_TIMEOUT_MS = 120000;
+
 /** Socket.io client for an Uptime Kuma server. It keeps the pushed monitor, beat and uptime caches up to date. */
 export class KumaClient {
     #url;
@@ -61,6 +65,7 @@ export class KumaClient {
     #password;
     #jwt;
     #timeoutMs;
+    #loginTimeoutMs;
     #socket = null;
     #monitors = {};
     #notifications = [];
@@ -75,13 +80,15 @@ export class KumaClient {
      * @param {string} options.password Login password, used when no jwt is given
      * @param {string} options.jwt Login token; takes precedence over username and password
      * @param {number} options.timeoutMs Milliseconds to wait for a connection or an answer
+     * @param {number} options.loginTimeoutMs Milliseconds to wait for the answer to a login
      */
-    constructor({ url, username, password, jwt, timeoutMs = 15000 }) {
+    constructor({ url, username, password, jwt, timeoutMs = 15000, loginTimeoutMs = LOGIN_TIMEOUT_MS }) {
         this.#url = url;
         this.#username = username;
         this.#password = password;
         this.#jwt = jwt;
         this.#timeoutMs = timeoutMs;
+        this.#loginTimeoutMs = loginTimeoutMs;
     }
 
     /**
@@ -121,11 +128,11 @@ export class KumaClient {
                     return;
                 }
                 greeted = true;
+                clearTimeout(noGreeting);
                 try {
                     await this.#login();
                     if (first) {
                         first = false;
-                        clearTimeout(noGreeting);
                         resolve();
                     }
                 } catch (error) {
@@ -270,11 +277,12 @@ export class KumaClient {
         if (!this.#socket) {
             throw new Error("Not connected");
         }
+        const timeoutMs = event === "login" || event === "loginByToken" ? this.#loginTimeoutMs : this.#timeoutMs;
         let res;
         try {
-            res = await this.#socket.timeout(this.#timeoutMs).emitWithAck(event, ...args);
+            res = await this.#socket.timeout(timeoutMs).emitWithAck(event, ...args);
         } catch (_) {
-            throw new Error(`${event} timed out after ${this.#timeoutMs} ms`);
+            throw new Error(`${event} timed out after ${timeoutMs} ms`);
         }
         if (res?.tokenRequired) {
             throw new Error("Two-factor authentication is on for this account: set KUMA_JWT instead of a password");
