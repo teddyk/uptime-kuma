@@ -1983,6 +1983,8 @@ async function shutdownFunction(signal) {
 
     await server.stop();
 
+    await require("./notification-batcher").flushAll();
+
     log.info("server", "Stopping all monitors");
     for (let id in server.monitorList) {
         let monitor = server.monitorList[id];

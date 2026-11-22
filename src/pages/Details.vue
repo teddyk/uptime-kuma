@@ -32,7 +32,8 @@
                         monitor.type === 'keyword' ||
                         monitor.type === 'json-query' ||
                         monitor.type === 'real-browser' ||
-                        monitor.type === 'websocket-upgrade'
+                        monitor.type === 'websocket-upgrade' ||
+                        ['icecast', 'hls', 'dash'].includes(monitor.type)
                     "
                     :href="monitor.url"
                     target="_blank"
@@ -354,6 +355,7 @@
                             <th>{{ $t("Status") }}</th>
                             <th>{{ $t("DateTime") }}</th>
                             <th>{{ $t("Message") }}</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -363,10 +365,20 @@
                                 <Datetime :value="beat.time" />
                             </td>
                             <td class="border-0">{{ beat.msg }}</td>
+                            <td class="border-0 text-end">
+                                <button
+                                    v-if="beat.hasDetail"
+                                    type="button"
+                                    class="btn btn-sm btn-outline-primary"
+                                    @click="showHttpDetail(beat)"
+                                >
+                                    {{ $t("Details") }}
+                                </button>
+                            </td>
                         </tr>
 
                         <tr v-if="importantHeartBeatListLength === 0">
-                            <td colspan="3">
+                            <td colspan="4">
                                 {{ $t("No important events") }}
                             </td>
                         </tr>
@@ -382,6 +394,8 @@
                     />
                 </div>
             </div>
+
+            <HttpDetailDialog ref="httpDetailDialog" />
 
             <Confirm ref="confirmPause" :yes-text="$t('Yes')" :no-text="$t('No')" @yes="pauseMonitor">
                 {{ $t("pauseMonitorMsg") }}
@@ -462,6 +476,7 @@ import "prismjs/components/prism-css";
 import { PrismEditor } from "vue-prism-editor";
 import "vue-prism-editor/dist/prismeditor.min.css";
 import ScreenshotDialog from "../components/ScreenshotDialog.vue";
+import HttpDetailDialog from "../components/HttpDetailDialog.vue";
 
 export default {
     components: {
@@ -477,6 +492,7 @@ export default {
         CertificateInfo,
         PrismEditor,
         ScreenshotDialog,
+        HttpDetailDialog,
     },
     data() {
         return {
@@ -690,6 +706,15 @@ export default {
          * Show Screenshot Dialog
          * @returns {void}
          */
+        /**
+         * Open the request/response details dialog of an important heartbeat.
+         * @param {object} beat Heartbeat from the important list
+         * @returns {void}
+         */
+        showHttpDetail(beat) {
+            this.$refs.httpDetailDialog.show(beat.monitorID, beat.time);
+        },
+
         showScreenshotDialog() {
             this.$refs.screenshotDialog.show();
         },

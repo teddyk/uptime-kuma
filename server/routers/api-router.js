@@ -17,6 +17,7 @@ const { makeBadge } = require("badge-maker");
 const { Prometheus } = require("../prometheus");
 const { UptimeCalculator } = require("../uptime-calculator");
 const { Settings } = require("../settings");
+const peerConfirm = require("../peer-confirm");
 
 let router = express.Router();
 
@@ -604,6 +605,35 @@ function determineStatus(status, previousHeartbeat, maxretries, isUpsideDown, be
         }
     }
 }
+
+// Peer side of peer confirmation: run a monitor check once, from the raw row sent by the main instance
+router.post("/api/peer-check", async (request, response) => {
+    const token = process.env.UPTIME_KUMA_PEER_TOKEN;
+    if (!token) {
+        response.status(404).end();
+        return;
+    }
+    if (!peerConfirm.checkToken(request.get("Authorization"), token)) {
+        response.status(401).json({ ok: false, reason: "unauthorized" });
+        return;
+    }
+
+    try {
+        const row = request.body?.monitor;
+        if (!row || typeof row !== "object") {
+            response.status(400).json({ ok: false, reason: "invalid" });
+        } else if (!peerConfirm.isSupported(row)) {
+            response.json({ ok: false, reason: "unsupported" });
+        } else {
+            // id 0 never matches a row, so nothing keyed by monitor id can touch this instance's own data
+            const monitor = R.convertToBean("monitor", { ...row, id: 0, parent: null });
+            response.json({ ok: true, ...(await monitor.start(null, true)) });
+        }
+    } catch (e) {
+        log.warn("peer", `peer-check failed: ${e.message}`);
+        response.status(500).json({ ok: false, reason: "error" });
+    }
+});
 
 /**
  * Check whether a monitor is publc

@@ -45,7 +45,9 @@ const {
 const { R } = require("redbean-node");
 const { BeanModel } = require("redbean-node/dist/bean-model");
 const { Notification } = require("../notification");
+const NotificationBatcher = require("../notification-batcher");
 const { Proxy } = require("../proxy");
+const { buildHttpDetail, encodeHttpDetail, formatHttpDetailText, trackPeerAddress } = require("../http-detail");
 const { demoMode } = require("../config");
 const version = require("../../package.json").version;
 const apicache = require("../utils/response-cache");
@@ -62,6 +64,7 @@ const zlib = require("node:zlib");
 const { promisify } = require("node:util");
 const brotliCompress = promisify(zlib.brotliCompress);
 const DomainExpiry = require("./domain_expiry");
+const peerConfirm = require("../peer-confirm");
 
 const rootCertificates = rootCertificatesFingerprints();
 
@@ -414,16 +417,23 @@ class Monitor extends BeanModel {
     /**
      * Start monitor
      * @param {Server} io Socket server instance
-     * @returns {Promise<void>}
+     * @param {boolean} oneShot Run one check without side effects and resolve with {status, msg, ping} (peer-check)
+     * @returns {Promise<void|object>} Nothing, or the check result in one-shot mode
      */
-    async start(io) {
+    async start(io, oneShot = false) {
         let previousBeat = null;
         let retries = 0;
+        let peerHolds = 0;
 
         this.rootCertificates = rootCertificates;
 
+        if (oneShot) {
+            this.isOneShot = true;
+            this.maxretries = 0;
+        }
+
         try {
-            this.prometheus = new Prometheus(this, await this.getTags());
+            this.prometheus = oneShot ? undefined : new Prometheus(this, await this.getTags());
         } catch (e) {
             log.error("prometheus", "Please submit an issue to our GitHub repo. Prometheus update error: ", e.message);
         }
@@ -445,8 +455,10 @@ class Monitor extends BeanModel {
             // Expose here for prometheus update
             // undefined if not https
             let tlsInfo = undefined;
+            // Raw axios response, so the catch can still use it for keyword/json-query failures
+            let httpResponse = null;
 
-            if (!previousBeat || this.type === "push") {
+            if (!oneShot && (!previousBeat || this.type === "push")) {
                 previousBeat = await R.findOne("heartbeat", " monitor_id = ? ORDER BY id DESC", [this.id]);
                 if (previousBeat) {
                     retries = previousBeat.retries;
@@ -472,7 +484,7 @@ class Monitor extends BeanModel {
             }
 
             try {
-                if (await Monitor.isUnderMaintenance(this.id)) {
+                if (!oneShot && (await Monitor.isUnderMaintenance(this.id))) {
                     bean.msg = "Monitor under maintenance";
                     bean.status = MAINTENANCE;
                 } else if (this.type === "http" || this.type === "keyword" || this.type === "json-query") {
@@ -631,6 +643,9 @@ class Monitor extends BeanModel {
                         }
                     }
 
+                    trackPeerAddress(options.httpAgent);
+                    trackPeerAddress(options.httpsAgent);
+
                     let tlsInfo = {};
                     // Store tlsInfo when secureConnect event is emitted
                     // The keylog event listener is a workaround to access the tlsSocket
@@ -652,13 +667,19 @@ class Monitor extends BeanModel {
 
                     // Make Request
                     let res = await this.makeAxiosRequest(options);
+                    httpResponse = res;
 
                     bean.msg = `${res.status} - ${res.statusText}`;
                     bean.ping = dayjs().valueOf() - startTime;
 
-                    // in the frontend, the save response is only shown if the saveErrorResponse is set
-                    if (this.getSaveResponse() && this.getSaveErrorResponse()) {
-                        await this.saveResponseData(bean, res.data);
+                    // Both toggles on: detail on every success. Error toggle only: detail on the recovery beat.
+                    if (
+                        this.getSaveErrorResponse() &&
+                        (this.getSaveResponse() || (previousBeat && previousBeat.status !== UP))
+                    ) {
+                        bean.response = await encodeHttpDetail(
+                            buildHttpDetail({ response: res, maxBodyLength: this.response_max_length ?? undefined })
+                        );
                     }
 
                     // fallback for if kelog event is not emitted, but we may still have tlsInfo,
@@ -923,7 +944,19 @@ class Monitor extends BeanModel {
                     bean.msg = error.message;
                 }
 
-                if (this.getSaveErrorResponse() && error?.response?.data !== undefined) {
+                if (
+                    this.getSaveErrorResponse() &&
+                    ["http", "keyword", "json-query"].includes(this.type) &&
+                    (error?.request || error?.response || httpResponse)
+                ) {
+                    bean.response = await encodeHttpDetail(
+                        buildHttpDetail({
+                            response: httpResponse,
+                            error,
+                            maxBodyLength: this.response_max_length ?? undefined,
+                        })
+                    );
+                } else if (this.getSaveErrorResponse() && error?.response?.data !== undefined) {
                     await this.saveResponseData(bean, error.response.data);
                 }
 
@@ -957,6 +990,18 @@ class Monitor extends BeanModel {
                         // Continue counting retries during DOWN
                         retries++;
                     }
+                }
+            }
+
+            if (oneShot) {
+                return { status: bean.status, msg: bean.msg, ping: bean.ping };
+            }
+
+            if (peerConfirm.isEnabled()) {
+                if (bean.status === UP) {
+                    peerHolds = 0;
+                } else if (bean.status === DOWN && previousBeat?.status !== DOWN) {
+                    peerHolds = await peerConfirm.confirmDown(this, bean, peerHolds);
                 }
             }
 
@@ -1107,6 +1152,10 @@ class Monitor extends BeanModel {
                 }
             }
         };
+
+        if (oneShot) {
+            return beat();
+        }
 
         // Delay Push Type
         if (this.type === "push") {
@@ -1468,6 +1517,9 @@ class Monitor extends BeanModel {
             let msg = `[${monitor.name}] [${text}] ${bean.msg}`;
 
             const heartbeatJSON = await bean.toJSONAsync({ decodeResponse: true });
+            if (heartbeatJSON.httpDetail) {
+                msg += "\n\n" + formatHttpDetailText(heartbeatJSON.httpDetail);
+            }
             const monitorData = [{ id: monitor.id, active: monitor.active, name: monitor.name }];
             const preloadData = await Monitor.preparePreloadData(monitorData);
             // Prevent if the msg is undefined, notifications such as Discord cannot send out.
@@ -1508,17 +1560,7 @@ class Monitor extends BeanModel {
             }
 
             for (let notification of notificationList) {
-                try {
-                    await Notification.send(
-                        JSON.parse(notification.config),
-                        msg,
-                        monitor.toJSON(preloadData, false),
-                        heartbeatJSON
-                    );
-                } catch (e) {
-                    log.error("monitor", "Cannot send notification to " + notification.name);
-                    log.error("monitor", e);
-                }
+                await NotificationBatcher.enqueue(notification, msg, monitor.toJSON(preloadData, false), heartbeatJSON);
             }
         }
     }
@@ -2075,6 +2117,9 @@ class Monitor extends BeanModel {
      * @returns {Promise<void>}
      */
     async handleTlsInfo(tlsInfo) {
+        if (this.isOneShot) {
+            return;
+        }
         await this.updateTlsInfo(tlsInfo);
         this.prometheus?.update(null, tlsInfo, null);
 

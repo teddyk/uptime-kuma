@@ -68,7 +68,8 @@ class SMTP extends NotificationProvider {
         }
 
         // default values in case the user does not want to template
-        let subject = msg;
+        // a combined (grouped) message is multi-line, keep the subject to its first line
+        let subject = msg.split("\n")[0];
         let body = msg;
         let useHTMLBody = false;
         if (heartbeatJSON) {

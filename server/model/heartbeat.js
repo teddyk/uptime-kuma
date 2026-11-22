@@ -2,6 +2,7 @@ const { BeanModel } = require("redbean-node/dist/bean-model");
 const zlib = require("node:zlib");
 const { promisify } = require("node:util");
 const brotliDecompress = promisify(zlib.brotliDecompress);
+const { decodeHttpDetail, isHttpDetailValue } = require("../http-detail");
 
 /**
  * status:
@@ -30,6 +31,8 @@ class Heartbeat extends BeanModel {
      * @returns {object} Object ready to parse
      */
     toJSON() {
+        // Detail rows are fetched on demand (getHeartbeatDetail), so the blob is not shipped in lists
+        const hasDetail = isHttpDetailValue(this._response);
         return {
             monitorID: this._monitorId,
             status: this._status,
@@ -39,7 +42,8 @@ class Heartbeat extends BeanModel {
             important: this._important,
             duration: this._duration,
             retries: this._retries,
-            response: this._response,
+            response: hasDetail ? null : this._response,
+            hasDetail,
         };
     }
 
@@ -49,6 +53,13 @@ class Heartbeat extends BeanModel {
      * @returns {Promise<object>} Object ready to parse
      */
     async toJSONAsync(opts) {
+        let response;
+        let httpDetail;
+        if (opts?.decodeResponse) {
+            httpDetail = (await decodeHttpDetail(this._response)) || undefined;
+            response = httpDetail ? httpDetail.body : await Heartbeat.decodeResponseValue(this._response);
+        }
+
         return {
             monitorID: this._monitorId,
             status: this._status,
@@ -58,7 +69,8 @@ class Heartbeat extends BeanModel {
             important: this._important,
             duration: this._duration,
             retries: this._retries,
-            response: opts?.decodeResponse ? await Heartbeat.decodeResponseValue(this._response) : undefined,
+            response,
+            httpDetail,
         };
     }
 

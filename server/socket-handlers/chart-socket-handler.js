@@ -1,6 +1,9 @@
 const { checkLogin } = require("../util-server");
 const { UptimeCalculator } = require("../uptime-calculator");
 const { log } = require("../../src/util");
+const { R } = require("redbean-node");
+const Heartbeat = require("../model/heartbeat");
+const { decodeHttpDetail } = require("../http-detail");
 
 module.exports.chartSocketHandler = (socket) => {
     socket.on("getMonitorChartData", async (monitorID, period, callback) => {
@@ -27,6 +30,41 @@ module.exports.chartSocketHandler = (socket) => {
             callback({
                 ok: true,
                 data,
+            });
+        } catch (e) {
+            callback({
+                ok: false,
+                msg: e.message,
+            });
+        }
+    });
+
+    socket.on("getHeartbeatDetail", async (monitorID, time, callback) => {
+        try {
+            checkLogin(socket);
+
+            const row = await R.getRow(
+                `
+                SELECT heartbeat.response
+                FROM heartbeat
+                JOIN monitor ON monitor.id = heartbeat.monitor_id
+                WHERE heartbeat.monitor_id = ?
+                  AND heartbeat.time = ?
+                  AND monitor.user_id = ?
+            `,
+                [monitorID, time, socket.userID]
+            );
+
+            if (!row) {
+                throw new Error("Heartbeat not found.");
+            }
+
+            const detail = await decodeHttpDetail(row.response);
+            callback({
+                ok: true,
+                detail,
+                // Legacy rows hold the plain response body only
+                body: detail ? null : await Heartbeat.decodeResponseValue(row.response),
             });
         } catch (e) {
             callback({
