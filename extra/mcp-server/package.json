@@ -1,0 +1,26 @@
+{
+    "name": "uptime-kuma-fork-mcp-server",
+    "version": "1.0.0",
+    "private": true,
+    "description": "MCP server for this Uptime Kuma fork: read monitor state and, when enabled, add and change monitors",
+    "license": "MIT",
+    "type": "module",
+    "bin": {
+        "uptime-kuma-mcp": "index.js"
+    },
+    "engines": {
+        "node": ">= 20.4.0"
+    },
+    "scripts": {
+        "start": "node index.js",
+        "test": "node --test"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.32.2",
+        "socket.io-client": "~4.8.3",
+        "zod": "^4.6.7"
+    },
+    "devDependencies": {
+        "socket.io": "~4.8.3"
+    }
+}
