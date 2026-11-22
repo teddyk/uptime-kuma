@@ -2146,6 +2146,17 @@ class Monitor extends BeanModel {
     }
 
     /**
+     * Monitors to run at server start: active themselves, with no paused group at any level above them.
+     * A monitor under a paused group keeps its own active value, so resuming the group brings it back.
+     * @returns {Promise<Monitor[]>} Monitors to start
+     */
+    static async getRunnableList() {
+        const list = await R.find("monitor", " active = 1 ");
+        const parentActive = await Promise.all(list.map((monitor) => Monitor.isParentActive(monitor.id)));
+        return list.filter((monitor, index) => parentActive[index]);
+    }
+
+    /**
      * Obtains a new Oidc Token
      * @returns {Promise<object>} OAuthProvider client
      */

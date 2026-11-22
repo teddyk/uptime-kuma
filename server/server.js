@@ -1106,6 +1106,7 @@ let needSetup = false;
             try {
                 checkLogin(socket);
                 await startMonitor(socket.userID, monitorID);
+                await startChildren(socket.userID, monitorID);
                 await server.sendUpdateMonitorIntoList(socket, monitorID);
 
                 callback({
@@ -1922,13 +1923,33 @@ async function startMonitor(userID, monitorID) {
     await R.exec("UPDATE monitor SET active = 1 WHERE id = ? AND user_id = ? ", [monitorID, userID]);
 
     let monitor = await R.findOne("monitor", " id = ? ", [monitorID]);
+    const parentActive = await Monitor.isParentActive(monitor.id);
 
     if (monitor.id in server.monitorList) {
         await server.monitorList[monitor.id].stop();
     }
 
     server.monitorList[monitor.id] = monitor;
-    await monitor.start(io);
+
+    // Under a paused group the monitor stays stopped. Resuming the group starts it.
+    if (parentActive) {
+        await monitor.start(io);
+    }
+}
+
+/**
+ * Start the active monitors under a group that was just resumed
+ * @param {number} userID ID of user who owns monitor
+ * @param {number} monitorID ID of the resumed group
+ * @returns {Promise<void>}
+ */
+async function startChildren(userID, monitorID) {
+    for (const child of await Monitor.getChildren(monitorID)) {
+        if (child.active) {
+            await startMonitor(userID, child.id);
+            await startChildren(userID, child.id);
+        }
+    }
 }
 
 /**
@@ -1958,6 +1979,13 @@ async function pauseMonitor(userID, monitorID) {
         await server.monitorList[monitorID].stop();
         server.monitorList[monitorID].active = 0;
     }
+
+    // Monitors under a paused group stop too. They keep their own active value.
+    for (const childID of await Monitor.getAllChildrenIDs(monitorID)) {
+        if (childID in server.monitorList) {
+            await server.monitorList[childID].stop();
+        }
+    }
 }
 
 /**
@@ -1965,7 +1993,7 @@ async function pauseMonitor(userID, monitorID) {
  * @returns {Promise<void>}
  */
 async function startMonitors() {
-    let list = await R.find("monitor", " active = 1 ");
+    let list = await Monitor.getRunnableList();
 
     for (let monitor of list) {
         server.monitorList[monitor.id] = monitor;
