@@ -136,6 +136,9 @@ class UptimeKumaServer {
         UptimeKumaServer.monitorTypeList["sftp"] = new SFTPMonitorType();
         UptimeKumaServer.monitorTypeList["oracledb"] = new OracleDbMonitorType();
         UptimeKumaServer.monitorTypeList["ntp"] = new NTPMonitorType();
+        UptimeKumaServer.monitorTypeList["icecast"] = new IcecastMonitorType();
+        UptimeKumaServer.monitorTypeList["hls"] = new HLSMonitorType();
+        UptimeKumaServer.monitorTypeList["dash"] = new DashMonitorType();
 
         // Allow all CORS origins (polling) in development
         let cors = undefined;
@@ -592,4 +595,7 @@ const { MysqlMonitorType } = require("./monitor-types/mysql");
 const { SFTPMonitorType } = require("./monitor-types/sftp");
 const { OracleDbMonitorType } = require("./monitor-types/oracledb");
 const { NTPMonitorType } = require("./monitor-types/ntp");
+const { IcecastMonitorType } = require("./monitor-types/icecast");
+const { HLSMonitorType } = require("./monitor-types/hls");
+const { DashMonitorType } = require("./monitor-types/dash");
 const Monitor = require("./model/monitor");

@@ -79,11 +79,14 @@
 
                                     <!-- Should sort from A to Z in this category -->
                                     <optgroup :label="$t('Specific Monitor Type')">
+                                        <option value="dash">MPEG-DASH stream</option>
                                         <option value="globalping">
                                             {{ $t("Globalping - Access global monitoring probes") }}
                                         </option>
                                         <option value="grpc-keyword">gRPC(s) - {{ $t("Keyword") }}</option>
+                                        <option value="hls">HLS stream</option>
                                         <option value="json-query">HTTP(s) - {{ $t("Json Query") }}</option>
+                                        <option value="icecast">Icecast / Shoutcast stream</option>
                                         <option value="kafka-producer">Kafka Producer</option>
                                         <option value="mqtt">MQTT</option>
                                         <option value="ntp">NTP</option>
@@ -192,7 +195,10 @@
                                     monitor.type === 'http' ||
                                     monitor.type === 'keyword' ||
                                     monitor.type === 'json-query' ||
-                                    monitor.type === 'real-browser'
+                                    monitor.type === 'real-browser' ||
+                                    monitor.type === 'icecast' ||
+                                    monitor.type === 'hls' ||
+                                    monitor.type === 'dash'
                                 "
                                 class="my-3"
                             >
@@ -1653,7 +1659,7 @@
                                 </div>
                             </div>
 
-                            <!-- Timeout: HTTP / JSON query / Keyword / Ping / RabbitMQ / SNMP / Websocket Upgrade only -->
+                            <!-- Timeout: HTTP / JSON query / Keyword / Ping / RabbitMQ / SNMP / Websocket Upgrade / Icecast / HLS / DASH only -->
                             <div
                                 v-if="
                                     monitor.type === 'http' ||
@@ -1663,7 +1669,10 @@
                                     monitor.type === 'rabbitmq' ||
                                     monitor.type === 'snmp' ||
                                     monitor.type === 'websocket-upgrade' ||
-                                    monitor.type === 'kafka-producer'
+                                    monitor.type === 'kafka-producer' ||
+                                    monitor.type === 'icecast' ||
+                                    monitor.type === 'hls' ||
+                                    monitor.type === 'dash'
                                 "
                                 class="my-3"
                             >
@@ -1816,6 +1825,9 @@
                                     monitor.type === 'keyword' ||
                                     monitor.type === 'json-query' ||
                                     monitor.type === 'redis' ||
+                                    monitor.type === 'icecast' ||
+                                    monitor.type === 'hls' ||
+                                    monitor.type === 'dash' ||
                                     (monitor.type === 'globalping' && monitor.subtype === 'http')
                                 "
                                 class="my-3 form-check"
@@ -3797,7 +3809,7 @@ message HealthCheckResponse {
 
             // Change to http (override websocket-upgrade defaults)
             // Because user may see wss:// and default to http code 1000, which is strange for http monitor.
-            if (["http", "keyword", "real-browser"].includes(newType)) {
+            if (["http", "keyword", "real-browser", "icecast", "hls", "dash"].includes(newType)) {
                 if (!this.monitor.url || this.monitor.url === defaultValueList["websocket-upgrade"].url) {
                     this.monitor.url = defaultValueList.http.url;
                 }
@@ -4269,6 +4281,9 @@ message HealthCheckResponse {
                 keyword: ["http:", "https:"],
                 "json-query": ["http:", "https:"],
                 "websocket-upgrade": ["ws:", "wss:"],
+                icecast: ["http:", "https:"],
+                hls: ["http:", "https:"],
+                dash: ["http:", "https:"],
                 "real-browser": null,
                 mqtt: ["mqtt:", "mqtts:", "ws:", "wss:"],
             };

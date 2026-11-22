@@ -263,7 +263,10 @@ export default {
                 return (
                     this.$root.monitorList[monitor.element.id].type === "http" ||
                     this.$root.monitorList[monitor.element.id].type === "keyword" ||
-                    this.$root.monitorList[monitor.element.id].type === "json-query"
+                    this.$root.monitorList[monitor.element.id].type === "json-query" ||
+                    this.$root.monitorList[monitor.element.id].type === "icecast" ||
+                    this.$root.monitorList[monitor.element.id].type === "hls" ||
+                    this.$root.monitorList[monitor.element.id].type === "dash"
                 );
             }
             return monitor.element.sendUrl && monitor.element.url && monitor.element.url !== "https://";
