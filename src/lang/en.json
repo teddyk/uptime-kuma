@@ -22,6 +22,7 @@
     "Game": "Game",
     "Primary Base URL": "Primary Base URL",
     "versionIs": "Version: {version}",
+    "forkVersionIs": "Fork Version: {version}",
     "Check Update On GitHub": "Check Update On GitHub",
     "List": "List",
     "Home": "Home",

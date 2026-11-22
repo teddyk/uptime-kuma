@@ -150,6 +150,7 @@ async function sendInfo(socket, hideVersion = false) {
     };
     if (!hideVersion) {
         info.version = checkVersion.version;
+        info.forkVersion = require("./fork-version");
         info.latestVersion = checkVersion.latestVersion;
         info.isContainer = process.env.UPTIME_KUMA_IS_CONTAINER === "1";
         info.dbType = Database.dbConfig.type;
