@@ -1,5 +1,6 @@
 <template>
     <div>
+        <SettingsHelp :text="$t('settingsHelpReverseProxy')" />
         <h4 class="mt-4">Cloudflare Tunnel</h4>
 
         <div class="my-3">
@@ -157,11 +158,13 @@
 <script>
 import HiddenInput from "../../components/HiddenInput.vue";
 import Confirm from "../Confirm.vue";
+import SettingsHelp from "./SettingsHelp.vue";
 
 const prefix = "cloudflared_";
 
 export default {
     components: {
+        SettingsHelp,
         HiddenInput,
         Confirm,
     },

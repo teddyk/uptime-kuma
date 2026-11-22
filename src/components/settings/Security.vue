@@ -1,5 +1,6 @@
 <template>
     <div>
+        <SettingsHelp :text="$t('settingsHelpSecurity')" />
         <div v-if="settingsLoaded" class="my-4">
             <!-- Change Password -->
             <template v-if="!settings.disableAuth">
@@ -146,9 +147,11 @@
 <script>
 import Confirm from "../../components/Confirm.vue";
 import TwoFADialog from "../../components/TwoFADialog.vue";
+import SettingsHelp from "./SettingsHelp.vue";
 
 export default {
     components: {
+        SettingsHelp,
         Confirm,
         TwoFADialog,
     },

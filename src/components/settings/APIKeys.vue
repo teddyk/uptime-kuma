@@ -1,5 +1,6 @@
 <template>
     <div>
+        <SettingsHelp :text="$t('settingsHelpAPIKeys')" />
         <div v-if="settings.disableAuth" class="mt-5 d-flex align-items-center justify-content-center my-3">
             {{ $t("apiKeysDisabledMsg") }}
         </div>
@@ -78,9 +79,11 @@
 <script>
 import APIKeyDialog from "../../components/APIKeyDialog.vue";
 import Confirm from "../Confirm.vue";
+import SettingsHelp from "./SettingsHelp.vue";
 
 export default {
     components: {
+        SettingsHelp,
         APIKeyDialog,
         Confirm,
     },

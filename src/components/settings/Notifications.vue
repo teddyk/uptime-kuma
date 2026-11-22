@@ -1,5 +1,6 @@
 <template>
     <div>
+        <SettingsHelp :text="$t('settingsHelpNotifications')" />
         <div class="notification-list my-4">
             <p v-if="$root.notificationList.length === 0">
                 {{ $t("Not available, please setup.") }}
@@ -137,9 +138,11 @@
 <script>
 import NotificationDialog from "../../components/NotificationDialog.vue";
 import ActionInput from "../ActionInput.vue";
+import SettingsHelp from "./SettingsHelp.vue";
 
 export default {
     components: {
+        SettingsHelp,
         NotificationDialog,
         ActionInput,
     },

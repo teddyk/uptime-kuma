@@ -1,5 +1,6 @@
 <template>
     <div>
+        <SettingsHelp :text="$t('settingsHelpDocker')" />
         <div class="dockerHost-list my-4">
             <p v-if="$root.dockerHostList.length === 0">
                 {{ $t("Not available, please setup.") }}
@@ -24,9 +25,11 @@
 
 <script>
 import DockerHostDialog from "../../components/DockerHostDialog.vue";
+import SettingsHelp from "./SettingsHelp.vue";
 
 export default {
     components: {
+        SettingsHelp,
         DockerHostDialog,
     },
 

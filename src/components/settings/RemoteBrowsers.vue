@@ -1,5 +1,6 @@
 <template>
     <div>
+        <SettingsHelp :text="$t('settingsHelpRemoteBrowsers')" />
         <div class="dockerHost-list my-4">
             <p v-if="$root.remoteBrowserList.length === 0">
                 {{ $t("Not available, please setup.") }}
@@ -33,9 +34,11 @@
 
 <script>
 import RemoteBrowserDialog from "../../components/RemoteBrowserDialog.vue";
+import SettingsHelp from "./SettingsHelp.vue";
 
 export default {
     components: {
+        SettingsHelp,
         RemoteBrowserDialog,
     },
 

@@ -1,5 +1,6 @@
 <template>
     <div class="my-4">
+        <SettingsHelp class="mb-4" :text="$t('settingsHelpTags')" />
         <div class="mx-0 mx-lg-4 pt-1 mb-4">
             <button class="btn btn-primary" @click.stop="addTag">
                 <font-awesome-icon icon="plus" />
@@ -48,9 +49,11 @@
 import TagEditDialog from "../../components/TagEditDialog.vue";
 import Tag from "../Tag.vue";
 import Confirm from "../Confirm.vue";
+import SettingsHelp from "./SettingsHelp.vue";
 
 export default {
     components: {
+        SettingsHelp,
         Confirm,
         TagEditDialog,
         Tag,

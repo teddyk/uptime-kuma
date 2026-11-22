@@ -1,5 +1,6 @@
 <template>
     <div>
+        <SettingsHelp :text="$t('settingsHelpProxies')" />
         <!-- Proxies -->
         <div class="proxy-list my-4">
             <p v-if="$root.proxyList.length === 0">
@@ -31,9 +32,11 @@
 
 <script>
 import ProxyDialog from "../../components/ProxyDialog.vue";
+import SettingsHelp from "./SettingsHelp.vue";
 
 export default {
     components: {
+        SettingsHelp,
         ProxyDialog,
     },
 };

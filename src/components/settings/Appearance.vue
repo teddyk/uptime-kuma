@@ -1,5 +1,6 @@
 <template>
     <div>
+        <SettingsHelp :text="$t('settingsHelpAppearance')" />
         <div class="my-4">
             <label for="language" class="form-label">
                 {{ $t("Language") }}
@@ -151,7 +152,13 @@
 </template>
 
 <script>
-export default {};
+import SettingsHelp from "./SettingsHelp.vue";
+
+export default {
+    components: {
+        SettingsHelp,
+    },
+};
 </script>
 
 <style lang="scss" scoped>

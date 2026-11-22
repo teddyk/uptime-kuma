@@ -1,5 +1,6 @@
 <template>
     <div>
+        <SettingsHelp :text="$t('settingsHelpMonitorHistory')" />
         <div class="my-4">
             <label for="keepDataPeriodDays" class="form-label">
                 {{ $t("clearDataOlderThan", [settings.keepDataPeriodDays]) }}
@@ -56,9 +57,11 @@
 <script>
 import Confirm from "../../components/Confirm.vue";
 import { log } from "../../util.ts";
+import SettingsHelp from "./SettingsHelp.vue";
 
 export default {
     components: {
+        SettingsHelp,
         Confirm,
     },
 

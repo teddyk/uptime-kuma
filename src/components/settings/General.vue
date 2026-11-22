@@ -1,5 +1,6 @@
 <template>
     <div>
+        <SettingsHelp :text="$t('settingsHelpGeneral')" />
         <form class="my-4" autocomplete="off" @submit.prevent="saveGeneral">
             <!-- Client side Timezone -->
             <div class="mb-4">
@@ -225,9 +226,11 @@
 import HiddenInput from "../../components/HiddenInput.vue";
 import dayjs from "dayjs";
 import { timezoneList } from "../../util-frontend";
+import SettingsHelp from "./SettingsHelp.vue";
 
 export default {
     components: {
+        SettingsHelp,
         HiddenInput,
     },
 
