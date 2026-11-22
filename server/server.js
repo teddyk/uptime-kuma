@@ -831,6 +831,9 @@ let needSetup = false;
                     throw new Error("Permission denied.");
                 }
 
+                // Before the edit moves it to another group
+                const wasActive = await Monitor.isActive(bean.id, bean.active);
+
                 // Check if Parent is Descendant (would cause endless loop)
                 if (monitor.parent !== null) {
                     const childIDs = await Monitor.getAllChildrenIDs(monitor.id);
@@ -982,13 +985,30 @@ let needSetup = false;
                 await R.store(bean);
 
                 if (removeGroupChildren) {
+                    const children = await Monitor.getChildren(monitor.id);
                     await Monitor.unlinkAllChildren(monitor.id);
+
+                    // The children of a paused group were stopped with it
+                    if (!wasActive) {
+                        await startTree(socket.userID, children);
+                    }
                 }
 
                 await updateMonitorNotification(bean.id, monitor.notificationIDList);
 
                 if (await Monitor.isActive(bean.id, bean.active)) {
                     await restartMonitor(socket.userID, bean.id);
+
+                    // Moved out of a paused group: the monitors under it start too
+                    if (!wasActive) {
+                        await startTree(socket.userID, await Monitor.getChildren(bean.id));
+                    }
+                } else {
+                    // Paused, or moved under a paused group: it stops, with the monitors under it
+                    if (bean.id in server.monitorList) {
+                        await server.monitorList[bean.id].stop();
+                    }
+                    await stopChildren(bean.id);
                 }
 
                 await server.sendUpdateMonitorIntoList(socket, bean.id);
@@ -1106,7 +1126,7 @@ let needSetup = false;
             try {
                 checkLogin(socket);
                 await startMonitor(socket.userID, monitorID);
-                await startChildren(socket.userID, monitorID);
+                await startTree(socket.userID, await Monitor.getChildren(monitorID));
                 await server.sendUpdateMonitorIntoList(socket, monitorID);
 
                 callback({
@@ -1182,6 +1202,11 @@ let needSetup = false;
                     } else {
                         // Unlink all children from the group (set parent to null)
                         await Monitor.unlinkAllChildren(monitorID);
+
+                        // The children of a paused group were stopped with it
+                        if (!(await Monitor.isActive(monitor.id, monitor.active))) {
+                            await startTree(socket.userID, children);
+                        }
 
                         // Notify frontend to update each child monitor's parent to null
                         if (children && children.length > 0) {
@@ -1938,16 +1963,30 @@ async function startMonitor(userID, monitorID) {
 }
 
 /**
- * Start the active monitors under a group that was just resumed
- * @param {number} userID ID of user who owns monitor
- * @param {number} monitorID ID of the resumed group
+ * Start the given monitors and the monitors under them.
+ * A paused one stays stopped, with everything under it.
+ * @param {number} userID ID of user who owns the monitors
+ * @param {object[]} monitors Monitor rows
  * @returns {Promise<void>}
  */
-async function startChildren(userID, monitorID) {
-    for (const child of await Monitor.getChildren(monitorID)) {
-        if (child.active) {
-            await startMonitor(userID, child.id);
-            await startChildren(userID, child.id);
+async function startTree(userID, monitors) {
+    for (const monitor of monitors) {
+        if (monitor.active) {
+            await startMonitor(userID, monitor.id);
+            await startTree(userID, await Monitor.getChildren(monitor.id));
+        }
+    }
+}
+
+/**
+ * Stop the monitors under a group. They keep their own active value.
+ * @param {number} monitorID ID of the group
+ * @returns {Promise<void>}
+ */
+async function stopChildren(monitorID) {
+    for (const childID of await Monitor.getAllChildrenIDs(monitorID)) {
+        if (childID in server.monitorList) {
+            await server.monitorList[childID].stop();
         }
     }
 }
@@ -1980,12 +2019,7 @@ async function pauseMonitor(userID, monitorID) {
         server.monitorList[monitorID].active = 0;
     }
 
-    // Monitors under a paused group stop too. They keep their own active value.
-    for (const childID of await Monitor.getAllChildrenIDs(monitorID)) {
-        if (childID in server.monitorList) {
-            await server.monitorList[childID].stop();
-        }
-    }
+    await stopChildren(monitorID);
 }
 
 /**
