@@ -1,6 +1,7 @@
 const { UptimeKumaServer } = require("./uptime-kuma-server");
 const { clearOldData } = require("./jobs/clear-old-data");
 const { incrementalVacuum } = require("./jobs/incremental-vacuum");
+const { trimHttpDetail } = require("./jobs/trim-http-detail");
 const Cron = require("croner");
 
 const jobs = [
@@ -14,6 +15,12 @@ const jobs = [
         name: "incremental-vacuum",
         interval: "*/5 * * * *",
         jobFunc: incrementalVacuum,
+        croner: null,
+    },
+    {
+        name: "trim-http-detail",
+        interval: "24 03 * * *",
+        jobFunc: trimHttpDetail,
         croner: null,
     },
 ];

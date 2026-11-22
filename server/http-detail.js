@@ -260,6 +260,7 @@ function formatHttpDetailText(detail, { maxBody = 2000 } = {}) {
 }
 
 module.exports = {
+    HTTP_DETAIL_PREFIX,
     buildHttpDetail,
     encodeHttpDetail,
     decodeHttpDetail,
