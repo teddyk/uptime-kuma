@@ -96,20 +96,36 @@ export class KumaClient {
 
         await new Promise((resolve, reject) => {
             let first = true;
+            let greeted = false;
             const fail = (error) => {
                 if (first) {
                     first = false;
+                    clearTimeout(noGreeting);
                     this.close();
                     reject(error);
                 }
             };
+            const noGreeting = setTimeout(
+                () => fail(new Error(`No greeting from ${this.#url}: is it an Uptime Kuma server?`)),
+                this.#timeoutMs
+            );
             socket.on("connect_error", (error) => fail(new Error(`Cannot connect to ${this.#url}: ${error.message}`)));
-            // A reconnected socket is anonymous, so every connect logs in again
-            socket.on("connect", async () => {
+            socket.on("connect", () => {
+                greeted = false;
+            });
+            // Kuma registers its handlers only after it greeted with `info`: a login sent on `connect` can be lost.
+            // A reconnected socket is anonymous, so every connection logs in again.
+            socket.on("info", async () => {
+                // Kuma sends `info` a second time after a login
+                if (greeted) {
+                    return;
+                }
+                greeted = true;
                 try {
                     await this.#login();
                     if (first) {
                         first = false;
+                        clearTimeout(noGreeting);
                         resolve();
                     }
                 } catch (error) {

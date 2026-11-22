@@ -267,6 +267,7 @@ describe("KumaClient requests", () => {
         const httpServer = createServer();
         const io = new Server(httpServer);
         io.on("connection", (socket) => {
+            socket.emit("info", {});
             socket.on("login", (data, callback) => callback({ ok: true }));
         });
         await new Promise((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
@@ -288,6 +289,7 @@ describe("KumaClient requests", () => {
         const httpServer = createServer();
         const io = new Server(httpServer);
         io.on("connection", (socket) => {
+            socket.emit("info", {});
             socket.on("login", (data, callback) => callback({ ok: true }));
             socket.on("getMonitor", (id, callback) =>
                 callback({ ok: false, msg: "Cannot read properties of null (reading 'id')" })
@@ -305,6 +307,30 @@ describe("KumaClient requests", () => {
         });
         await client.connect();
         await assert.rejects(client.getMonitor(7), /^Error: Monitor 7 not found$/);
+    });
+
+    it("logs in only after the greeting, and once per connection", async () => {
+        const { fake, client } = await setup();
+        await client.connect();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        assert.equal(fake.calls.filter((c) => c.event === "login").length, 1);
+    });
+
+    it("rejects when the server never greets", async () => {
+        const httpServer = createServer();
+        const io = new Server(httpServer);
+        await new Promise((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+        const client = new KumaClient({
+            url: `http://127.0.0.1:${httpServer.address().port}`,
+            username: "a",
+            password: "b",
+            timeoutMs: 200,
+        });
+        cleanups.push(async () => {
+            client.close();
+            await new Promise((resolve) => io.close(resolve));
+        });
+        await assert.rejects(client.connect(), /No greeting from/);
     });
 
     it("rejects before connect() was called", async () => {

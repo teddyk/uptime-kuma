@@ -3,6 +3,7 @@ import { Server } from "socket.io";
 
 const NOT_LOGGED_IN = { ok: false, msg: "You are not logged in." };
 const ROOM = "user";
+const GREETING_DELAY_MS = 50;
 
 /**
  * Start a socket.io server that mimics the parts of Uptime Kuma this package talks to.
@@ -41,6 +42,7 @@ export async function startFakeKuma({
     function afterLogin(socket) {
         socket.data.loggedIn = true;
         socket.join(ROOM);
+        socket.emit("info", { primaryBaseURL: null, version: "fake" });
         socket.emit("monitorList", structuredClone(state));
         socket.emit(
             "notificationList",
@@ -96,10 +98,15 @@ export async function startFakeKuma({
         io.to(ROOM).emit("updateMonitorIntoList", { [id]: structuredClone(state[id]) });
     }
 
-    io.on("connection", (socket) => {
+    io.on("connection", async (socket) => {
         socket.onAny((event, ...args) => {
             calls.push({ event, args: args.filter((arg) => typeof arg !== "function") });
         });
+
+        // Kuma reads settings before it greets with `info`, and registers its handlers only after that.
+        // An event that arrives earlier is lost, so a client must wait for the greeting.
+        await new Promise((resolve) => setTimeout(resolve, GREETING_DELAY_MS));
+        socket.emit("info", { primaryBaseURL: null });
 
         socket.on("login", (data, callback) => {
             if (twoFA && !data.token) {
