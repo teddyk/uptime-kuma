@@ -1641,5 +1641,18 @@
     "settingsHelpRemoteBrowsers": "A Remote Browser is a Chromium instance running elsewhere that Uptime Kuma controls over a Playwright WebSocket URL. A monitor of type HTTP(s) - Browser Engine uses it instead of the Chromium on the Uptime Kuma server when you tick Use a Remote Browser. Use it when you do not want Chromium on the Uptime Kuma host, for example by pointing it at a browser container on another machine. No other monitor type uses it.",
     "settingsHelpSecurity": "Controls how you sign in to Uptime Kuma. Here you change your password, set up two-factor authentication or log out. Disable Auth removes the login screen entirely, so use it only when something in front of Uptime Kuma handles authentication. Disabling it needs your current password.",
     "settingsHelpAPIKeys": "API keys let tools such as Prometheus read the /metrics endpoint without your username and password. Create a key, then give it to the scraper as the Basic Auth password, with any username. A key only grants access to /metrics, not to monitors, settings or any other endpoint. After the first key is created, /metrics accepts keys only and your login stops working there.",
-    "settingsHelpProxies": "A proxy is an HTTP, HTTPS or SOCKS server that Uptime Kuma sends monitor requests through instead of connecting directly. Add one here, then select it on a monitor's edit page, for example to check a site that is only reachable through a proxy. Only HTTP(s), HTTP(s) - Keyword and HTTP(s) - Json Query monitors use proxies. Set As Default preselects it for new monitors, and Apply on all existing monitors assigns it to the current ones."
+    "settingsHelpProxies": "A proxy is an HTTP, HTTPS or SOCKS server that Uptime Kuma sends monitor requests through instead of connecting directly. Add one here, then select it on a monitor's edit page, for example to check a site that is only reachable through a proxy. Only HTTP(s), HTTP(s) - Keyword and HTTP(s) - Json Query monitors use proxies. Set As Default preselects it for new monitors, and Apply on all existing monitors assigns it to the current ones.",
+    "forkCheckIps": "Check via IPs",
+    "forkCheckIpsDescription": "One IP address per line. The same URL is requested once per IP. The hostname of the URL is kept as the Host header and the TLS server name. The monitor is down when any IP fails. Leave empty to resolve the hostname normally. Has no effect when a proxy is set on this monitor.",
+    "forkCheckDns": "Also check the address the hostname resolves to",
+    "forkHeaderConditions": "Response header conditions",
+    "forkHeaderConditionsDescription": "All conditions must pass for the monitor to be up. Header names and values are compared without regard to case.",
+    "forkHeaderName": "Header name",
+    "forkHeaderConditionAdd": "Add Header Condition",
+    "forkOpExists": "exists",
+    "forkOpNotExists": "does not exist",
+    "forkOpRegex": "matches regex",
+    "forkNewBadge": "NEW",
+    "forkPeerCheck": "Peer check",
+    "forkThisInstance": "This instance"
 }

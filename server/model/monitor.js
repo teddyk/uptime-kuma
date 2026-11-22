@@ -48,6 +48,7 @@ const { Notification } = require("../notification");
 const NotificationBatcher = require("../notification-batcher");
 const { Proxy } = require("../proxy");
 const { buildHttpDetail, encodeHttpDetail, formatHttpDetailText, trackPeerAddress } = require("../http-detail");
+const { parseForkOptions, ipTargets, checkHeaderConditions, pinnedLookup } = require("../fork-options");
 const { demoMode } = require("../config");
 const version = require("../../package.json").version;
 const apicache = require("../utils/response-cache");
@@ -204,6 +205,7 @@ class Monitor extends BeanModel {
             smtpSecurity: this.smtpSecurity,
             rabbitmqNodes: JSON.parse(this.rabbitmqNodes),
             conditions: JSON.parse(this.conditions),
+            forkOptions: parseForkOptions(this.fork_options),
             ntpStratumThreshold: this.ntp_stratum_threshold,
             ntpTimeOffsetThreshold: this.ntp_time_offset_threshold,
             ntpRootDispersionThreshold: this.ntp_root_dispersion_threshold,
@@ -487,6 +489,13 @@ class Monitor extends BeanModel {
                 if (!oneShot && (await Monitor.isUnderMaintenance(this.id))) {
                     bean.msg = "Monitor under maintenance";
                     bean.status = MAINTENANCE;
+                } else if (
+                    !this.isIpClone &&
+                    ["http", "keyword", "json-query"].includes(this.type) &&
+                    ipTargets(parseForkOptions(this.fork_options)).length > 1
+                ) {
+                    // Several addresses: one one-shot check per address, merged into this beat
+                    await this.checkAllIps(bean, io, previousBeat);
                 } else if (this.type === "http" || this.type === "keyword" || this.type === "json-query") {
                     // Do not do any queries/high loading things before the "bean.ping"
                     let startTime = dayjs().valueOf();
@@ -535,18 +544,25 @@ class Monitor extends BeanModel {
                         agentFamily = 6;
                     }
 
+                    // One IP to connect to: the URL's hostname stays as Host header and TLS server name
+                    const forkOptions = parseForkOptions(this.fork_options);
+                    const pinnedIp = this.isIpClone ? this.pinnedIp : ipTargets(forkOptions)[0];
+                    const agentLookup = pinnedIp ? { lookup: pinnedLookup(this.getUrl()?.hostname, pinnedIp) } : {};
+
                     const httpsAgentOptions = {
                         maxCachedSessions: 0, // Use Custom agent to disable session reuse (https://github.com/nodejs/node/issues/3940)
                         rejectUnauthorized: !this.getIgnoreTls(),
                         secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT,
                         autoSelectFamily: true,
                         ...(agentFamily ? { family: agentFamily } : {}),
+                        ...agentLookup,
                     };
 
                     const httpAgentOptions = {
                         maxCachedSessions: 0,
                         autoSelectFamily: true,
                         ...(agentFamily ? { family: agentFamily } : {}),
+                        ...agentLookup,
                     };
 
                     log.debug("monitor", `[${this.name}] Prepare Options for axios`);
@@ -675,7 +691,7 @@ class Monitor extends BeanModel {
                     // Both toggles on: detail on every success. Error toggle only: detail on the recovery beat.
                     if (
                         this.getSaveErrorResponse() &&
-                        (this.getSaveResponse() || (previousBeat && previousBeat.status !== UP))
+                        (this.getSaveResponse() || this.forceDetail || (previousBeat && previousBeat.status !== UP))
                     ) {
                         bean.response = await encodeHttpDetail(
                             buildHttpDetail({ response: res, maxBodyLength: this.response_max_length ?? undefined })
@@ -703,6 +719,8 @@ class Monitor extends BeanModel {
                     if (process.env.UPTIME_KUMA_LOG_RESPONSE_BODY_MONITOR_ID == this.id) {
                         log.info("monitor", res.data);
                     }
+
+                    checkHeaderConditions(res.headers, forkOptions.headerConditions);
 
                     if (this.type === "http") {
                         bean.status = UP;
@@ -994,7 +1012,7 @@ class Monitor extends BeanModel {
             }
 
             if (oneShot) {
-                return { status: bean.status, msg: bean.msg, ping: bean.ping };
+                return { status: bean.status, msg: bean.msg, ping: bean.ping, response: bean.response };
             }
 
             if (peerConfirm.isEnabled()) {
@@ -1194,6 +1212,48 @@ class Monitor extends BeanModel {
 
         // Offload brotli compression from main event loop to libuv thread pool
         bean.response = (await brotliCompress(Buffer.from(responseData, "utf8"))).toString("base64");
+    }
+
+    /**
+     * Check the monitor URL once per configured IP, in parallel, and merge the results into the beat.
+     * The monitor is up only when every IP passes.
+     * @param {Bean} bean Heartbeat being built
+     * @param {Server} io Socket server instance
+     * @param {Bean} previousBeat Previous heartbeat, if any
+     * @returns {Promise<void>}
+     * @throws {Error} Naming the IPs that failed
+     */
+    async checkAllIps(bean, io, previousBeat) {
+        // An empty entry is the address the hostname resolves to
+        const ips = ipTargets(parseForkOptions(this.fork_options));
+        // A transient monitor (peer check) carries its row, a stored one is read back from the database
+        const row = this.sourceRow || (await R.getRow("SELECT * FROM monitor WHERE id = ?", [this.id]));
+        const startTime = dayjs().valueOf();
+
+        const results = await Promise.all(
+            ips.map(async (ip, index) => {
+                // Upside down mode is applied once, by the caller
+                const clone = R.convertToBean("monitor", { ...row, id: index === 0 ? this.id : 0, upside_down: 0 });
+                clone.isIpClone = true;
+                clone.pinnedIp = ip;
+                // The first address keeps the certificate info of the monitor up to date
+                clone.keepTlsInfo = index === 0 && Boolean(this.id) && !this.isOneShot;
+                clone.forceDetail = Boolean(this.forceDetail || (previousBeat && previousBeat.status !== UP));
+                return { ip: ip || "DNS", ...(await clone.start(io, true)) };
+            })
+        );
+
+        bean.ping = dayjs().valueOf() - startTime;
+        const failed = results.filter((r) => r.status !== UP);
+        if (failed.length > 0) {
+            bean.response = failed[0].response ?? null;
+            throw new Error(
+                `${failed.length}/${ips.length} IPs failed. ` + failed.map((r) => `${r.ip}: ${r.msg}`).join("; ")
+            );
+        }
+        bean.response = results[0].response ?? null;
+        bean.msg = `${ips.length}/${ips.length} IPs OK. ${results[0].msg}`;
+        bean.status = UP;
     }
 
     /**
@@ -2117,7 +2177,7 @@ class Monitor extends BeanModel {
      * @returns {Promise<void>}
      */
     async handleTlsInfo(tlsInfo) {
-        if (this.isOneShot) {
+        if (this.isOneShot && !this.keepTlsInfo) {
             return;
         }
         await this.updateTlsInfo(tlsInfo);

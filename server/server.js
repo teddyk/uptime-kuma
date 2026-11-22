@@ -760,6 +760,11 @@ let needSetup = false;
 
                 monitor.conditions = JSON.stringify(monitor.conditions);
 
+                monitor.fork_options = JSON.stringify(
+                    require("./fork-options").validateForkOptions(monitor.forkOptions)
+                );
+                delete monitor.forkOptions;
+
                 monitor.rabbitmqNodes = JSON.stringify(monitor.rabbitmqNodes);
 
                 /*
@@ -949,6 +954,12 @@ let needSetup = false;
                 bean.rabbitmqUsername = monitor.rabbitmqUsername;
                 bean.rabbitmqPassword = monitor.rabbitmqPassword;
                 bean.conditions = JSON.stringify(monitor.conditions);
+                // A client that does not know the fork options leaves the stored ones as they are
+                if (monitor.forkOptions !== undefined) {
+                    bean.fork_options = JSON.stringify(
+                        require("./fork-options").validateForkOptions(monitor.forkOptions)
+                    );
+                }
                 bean.manual_status = monitor.manual_status;
                 bean.system_service_name = monitor.system_service_name;
                 bean.sshUsername = monitor.sshUsername;

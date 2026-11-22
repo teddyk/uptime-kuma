@@ -2161,6 +2161,101 @@
                                     </div>
                                 </div>
 
+                                <template
+                                    v-if="
+                                        monitor.type === 'http' ||
+                                        monitor.type === 'keyword' ||
+                                        monitor.type === 'json-query'
+                                    "
+                                >
+                                    <!-- Check via IPs -->
+                                    <div v-if="monitor.forkOptions" class="my-3">
+                                        <label for="forkCheckIps" class="form-label">
+                                            {{ $t("forkCheckIps") }}
+                                            <span class="badge bg-danger ms-1">{{ $t("forkNewBadge") }}</span>
+                                        </label>
+                                        <textarea
+                                            id="forkCheckIps"
+                                            :value="checkIpsText"
+                                            class="form-control"
+                                            rows="3"
+                                            placeholder="203.0.113.10&#10;2001:db8::10"
+                                            @input="onCheckIpsInput($event.target.value)"
+                                        ></textarea>
+                                        <div class="form-text">
+                                            {{ $t("forkCheckIpsDescription") }}
+                                        </div>
+                                        <div class="form-check mt-2">
+                                            <input
+                                                id="forkCheckDns"
+                                                v-model="monitor.forkOptions.checkDns"
+                                                class="form-check-input"
+                                                type="checkbox"
+                                            />
+                                            <label class="form-check-label" for="forkCheckDns">
+                                                {{ $t("forkCheckDns") }}
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Response header conditions -->
+                                    <div v-if="monitor.forkOptions" class="my-3">
+                                        <label class="form-label">
+                                            {{ $t("forkHeaderConditions") }}
+                                            <span class="badge bg-danger ms-1">{{ $t("forkNewBadge") }}</span>
+                                        </label>
+                                        <div
+                                            v-for="(condition, index) in monitor.forkOptions.headerConditions"
+                                            :key="index"
+                                            class="d-flex gap-2 mb-2"
+                                        >
+                                            <input
+                                                v-model="condition.name"
+                                                type="text"
+                                                class="form-control"
+                                                :placeholder="$t('forkHeaderName')"
+                                            />
+                                            <select v-model="condition.operator" class="form-select w-auto">
+                                                <option
+                                                    v-for="op in forkHeaderOperators"
+                                                    :key="op.value"
+                                                    :value="op.value"
+                                                >
+                                                    {{ $t(op.label) }}
+                                                </option>
+                                            </select>
+                                            <input
+                                                v-if="
+                                                    condition.operator !== 'exists' &&
+                                                    condition.operator !== 'not_exists'
+                                                "
+                                                v-model="condition.value"
+                                                type="text"
+                                                class="form-control"
+                                                :placeholder="$t('conditionValuePlaceholder')"
+                                            />
+                                            <button
+                                                class="btn btn-outline-danger"
+                                                type="button"
+                                                :title="$t('Delete')"
+                                                @click="removeHeaderCondition(index)"
+                                            >
+                                                <font-awesome-icon icon="trash" />
+                                            </button>
+                                        </div>
+                                        <button
+                                            class="btn btn-outline-secondary"
+                                            type="button"
+                                            @click="addHeaderCondition"
+                                        >
+                                            {{ $t("forkHeaderConditionAdd") }}
+                                        </button>
+                                        <div class="form-text">
+                                            {{ $t("forkHeaderConditionsDescription") }}
+                                        </div>
+                                    </div>
+                                </template>
+
                                 <div class="my-3">
                                     <label for="ipFamily" class="form-label">{{ $t("Ip Family") }}</label>
                                     <select id="ipFamily" v-model="monitor.ipFamily" class="form-select">
@@ -3250,6 +3345,16 @@
                         >
                             {{ $t("Save") }}
                         </button>
+                        <button
+                            id="monitor-cancel-btn"
+                            class="btn btn-secondary ms-2"
+                            type="button"
+                            :disabled="processing"
+                            data-testid="cancel-button"
+                            @click="cancelEdit"
+                        >
+                            {{ $t("Cancel") }}
+                        </button>
                     </div>
                 </div>
             </form>
@@ -3287,6 +3392,7 @@ import ProxyDialog from "../components/ProxyDialog.vue";
 import TagsManager from "../components/TagsManager.vue";
 import {
     genSecret,
+    getMonitorRelativeURL,
     MIN_INTERVAL_SECOND,
     PING_GLOBAL_TIMEOUT_MAX,
     PING_PER_REQUEST_TIMEOUT_MAX,
@@ -3372,6 +3478,7 @@ const monitorDefaults = {
     rabbitmqUsername: "",
     rabbitmqPassword: "",
     conditions: [],
+    forkOptions: { checkIps: [], checkDns: false, headerConditions: [] },
     system_service_name: "",
     sshAuthMethod: "password",
     ntpStratumThreshold: 5,
@@ -3400,6 +3507,16 @@ export default {
             minInterval: MIN_INTERVAL_SECOND,
             pingPerRequestTimeoutMax: PING_PER_REQUEST_TIMEOUT_MAX,
             processing: false,
+            checkIpsText: "",
+            forkHeaderOperators: [
+                { value: "exists", label: "forkOpExists" },
+                { value: "not_exists", label: "forkOpNotExists" },
+                { value: "equals", label: "equals" },
+                { value: "not_equals", label: "not equals" },
+                { value: "contains", label: "contains" },
+                { value: "not_contains", label: "not contains" },
+                { value: "regex", label: "forkOpRegex" },
+            ],
             monitor: {
                 notificationIDList: {},
                 // Do not add default value here, please check init() method
@@ -4076,7 +4193,10 @@ message HealthCheckResponse {
                     ping_numeric: true,
                     packetSize: 56,
                     ping_per_request_timeout: 2,
+                    // Fresh copy, so the shared defaults object is never mutated
+                    forkOptions: { checkIps: [], checkDns: false, headerConditions: [] },
                 };
+                this.checkIpsText = "";
 
                 if (this.$root.proxyList && !this.monitor.proxyId) {
                     const proxy = this.$root.proxyList.find((proxy) => proxy.default);
@@ -4102,6 +4222,14 @@ message HealthCheckResponse {
                         }
 
                         this.monitor = res.monitor;
+
+                        // Monitors loaded from an older server have no forkOptions
+                        this.monitor.forkOptions = {
+                            checkIps: this.monitor.forkOptions?.checkIps ?? [],
+                            checkDns: this.monitor.forkOptions?.checkDns ?? false,
+                            headerConditions: this.monitor.forkOptions?.headerConditions ?? [],
+                        };
+                        this.checkIpsText = this.monitor.forkOptions.checkIps.join("\n");
 
                         if (this.isClone) {
                             /*
@@ -4165,6 +4293,41 @@ message HealthCheckResponse {
             }
 
             this.draftGroupName = null;
+        },
+
+        /**
+         * Keep the IP textarea text and monitor.forkOptions.checkIps in sync
+         * @param {string} text Raw textarea content, one IP per line
+         * @returns {void}
+         */
+        onCheckIpsInput(text) {
+            this.checkIpsText = text;
+            this.monitor.forkOptions.checkIps = text
+                .split("\n")
+                .map((line) => line.trim())
+                .filter((line) => line !== "");
+        },
+
+        addHeaderCondition() {
+            this.monitor.forkOptions.headerConditions.push({ name: "", operator: "contains", value: "" });
+        },
+
+        removeHeaderCondition(index) {
+            this.monitor.forkOptions.headerConditions.splice(index, 1);
+        },
+
+        /**
+         * Leave the form: the monitor page when editing, the previous page otherwise
+         * @returns {void}
+         */
+        cancelEdit() {
+            if (this.isEdit) {
+                this.$router.push(getMonitorRelativeURL(this.monitor.id));
+            } else if (window.history.state?.back) {
+                this.$router.back();
+            } else {
+                this.$router.push("/dashboard");
+            }
         },
 
         addKafkaProducerBroker(newBroker) {
@@ -4374,6 +4537,22 @@ message HealthCheckResponse {
 
             if (this.monitor.headers) {
                 this.monitor.headers = JSON.stringify(JSON.parse(this.monitor.headers), null, 4);
+            }
+
+            if (this.monitor.forkOptions) {
+                this.monitor.forkOptions.checkIps = this.monitor.forkOptions.checkIps
+                    .map((ip) => ip.trim())
+                    .filter((ip) => ip !== "");
+                this.monitor.forkOptions.headerConditions = this.monitor.forkOptions.headerConditions
+                    .map((condition) => ({
+                        name: condition.name.trim(),
+                        operator: condition.operator,
+                        value:
+                            condition.operator === "exists" || condition.operator === "not_exists"
+                                ? ""
+                                : condition.value,
+                    }))
+                    .filter((condition) => condition.name !== "");
             }
 
             if (this.monitor.hostname) {

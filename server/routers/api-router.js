@@ -627,6 +627,10 @@ router.post("/api/peer-check", async (request, response) => {
         } else {
             // id 0 never matches a row, so nothing keyed by monitor id can touch this instance's own data
             const monitor = R.convertToBean("monitor", { ...row, id: 0, parent: null });
+            // Kept for the per-IP checks, which cannot read this monitor back from the database
+            monitor.sourceRow = { ...row, id: 0, parent: null };
+            // The caller keeps this instance's response next to its own, also when the check passes here
+            monitor.forceDetail = true;
             response.json({ ok: true, ...(await monitor.start(null, true)) });
         }
     } catch (e) {

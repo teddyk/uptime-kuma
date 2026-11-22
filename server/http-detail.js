@@ -256,7 +256,39 @@ function formatHttpDetailText(detail, { maxBody = 2000 } = {}) {
         lines.push("Body:", body);
     }
 
+    if (detail.peer) {
+        const ping = detail.peer.ping ? ` (${detail.peer.ping} ms)` : "";
+        lines.push("", `Peer check: ${detail.peer.status === 1 ? "UP" : "DOWN"} - ${detail.peer.msg ?? ""}${ping}`);
+        if (detail.peer.detail) {
+            lines.push(formatHttpDetailText(detail.peer.detail, { maxBody }));
+        }
+    }
+
     return lines.join("\n");
+}
+
+/**
+ * Add the peer's result to a stored HTTP detail, so one heartbeat keeps both responses.
+ * @param {string|null} value Stored value of heartbeat.response for the local check
+ * @param {{status: number, msg: string, ping: number, response: string}} answer Peer response body
+ * @returns {Promise<string|null>} New value for heartbeat.response. Unchanged when the local check stored no detail.
+ */
+async function attachPeerResult(value, answer) {
+    const detail = await decodeHttpDetail(value);
+    if (!detail) {
+        return value;
+    }
+    const peerDetail = await decodeHttpDetail(answer.response);
+    if (peerDetail) {
+        delete peerDetail.peer;
+    }
+    detail.peer = {
+        status: answer.status,
+        msg: answer.msg,
+        ping: answer.ping ?? null,
+        detail: peerDetail,
+    };
+    return await encodeHttpDetail(detail);
 }
 
 module.exports = {
@@ -267,4 +299,5 @@ module.exports = {
     isHttpDetailValue,
     trackPeerAddress,
     formatHttpDetailText,
+    attachPeerResult,
 };

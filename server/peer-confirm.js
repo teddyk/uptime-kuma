@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const axios = require("axios");
 const { R } = require("redbean-node");
 const { log, UP, DOWN, PENDING } = require("../src/util");
+const { attachPeerResult } = require("./http-detail");
 
 /**
  * Monitor types the peer cannot check for us: they depend on state of the main host or the main DB.
@@ -139,10 +140,14 @@ async function confirmDown(monitor, bean, held) {
     const result = decide(answer, held, getHold(), bean.msg);
     log.info(
         "peer",
-        `Monitor #${monitor.id} '${monitor.name}': peer answer ${JSON.stringify(answer)} -> status ${result.status}`
+        `Monitor #${monitor.id} '${monitor.name}': peer answer ${JSON.stringify(answer && { ...answer, response: undefined })} -> status ${result.status}`
     );
     bean.status = result.status;
     bean.msg = result.msg;
+    if (answer?.ok) {
+        // Keep the peer's response next to the local one
+        bean.response = await attachPeerResult(bean.response, answer);
+    }
     return result.held;
 }
 

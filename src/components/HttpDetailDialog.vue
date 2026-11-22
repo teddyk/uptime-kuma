@@ -12,39 +12,52 @@
                     <div v-if="loading">{{ $t("Loading...") }}</div>
                     <div v-else-if="errorMsg" class="text-danger">{{ errorMsg }}</div>
                     <div v-else-if="detail">
-                        <div class="mb-3">
-                            <strong>{{ $t("httpDetailSentTo") }}</strong>
-                            <div>{{ sentTo }}</div>
-                        </div>
+                        <div v-for="(block, index) in blocks" :key="index" :class="{ 'mt-4': index > 0 }">
+                            <h6 v-if="block.title">{{ block.title }}</h6>
 
-                        <div class="mb-3">
-                            <strong>{{ $t("httpDetailRequest") }}</strong>
-                            <div>{{ detail.request.method }} {{ detail.request.url }}</div>
-                        </div>
-
-                        <div v-if="requestHeaders" class="mb-3">
-                            <strong>{{ $t("httpDetailRequestHeaders") }}</strong>
-                            <pre class="detail-pre">{{ requestHeaders }}</pre>
-                        </div>
-
-                        <div class="mb-3">
-                            <strong>{{ $t("Response") }}</strong>
-                            <div v-if="detail.response">
-                                {{ detail.response.status }} {{ detail.response.statusText }}
+                            <div v-if="block.peer" class="mb-3">
+                                <Status :status="block.peer.status" />
+                                {{ block.peer.msg }}
+                                <span v-if="block.peer.ping != null">({{ $t("Ping") }}: {{ block.peer.ping }} ms)</span>
                             </div>
-                            <div v-else>
-                                {{ $t("httpDetailNoResponse") }}<span v-if="detail.error">: {{ errorText }}</span>
+
+                            <div v-if="block.detail">
+                                <div class="mb-3">
+                                    <strong>{{ $t("httpDetailSentTo") }}</strong>
+                                    <div>{{ sentTo(block.detail) }}</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <strong>{{ $t("httpDetailRequest") }}</strong>
+                                    <div>{{ block.detail.request.method }} {{ block.detail.request.url }}</div>
+                                </div>
+
+                                <div v-if="requestHeaders(block.detail)" class="mb-3">
+                                    <strong>{{ $t("httpDetailRequestHeaders") }}</strong>
+                                    <pre class="detail-pre">{{ requestHeaders(block.detail) }}</pre>
+                                </div>
+
+                                <div class="mb-3">
+                                    <strong>{{ $t("Response") }}</strong>
+                                    <div v-if="block.detail.response">
+                                        {{ block.detail.response.status }} {{ block.detail.response.statusText }}
+                                    </div>
+                                    <div v-else>
+                                        {{ $t("httpDetailNoResponse") }}
+                                        <span v-if="block.detail.error">: {{ errorText(block.detail) }}</span>
+                                    </div>
+                                </div>
+
+                                <div v-if="responseHeaders(block.detail)" class="mb-3">
+                                    <strong>{{ $t("httpDetailResponseHeaders") }}</strong>
+                                    <pre class="detail-pre">{{ responseHeaders(block.detail) }}</pre>
+                                </div>
+
+                                <div v-if="block.detail.body">
+                                    <strong>{{ $t("Body") }}</strong>
+                                    <pre class="detail-pre">{{ block.detail.body }}</pre>
+                                </div>
                             </div>
-                        </div>
-
-                        <div v-if="responseHeaders" class="mb-3">
-                            <strong>{{ $t("httpDetailResponseHeaders") }}</strong>
-                            <pre class="detail-pre">{{ responseHeaders }}</pre>
-                        </div>
-
-                        <div v-if="detail.body">
-                            <strong>{{ $t("Body") }}</strong>
-                            <pre class="detail-pre">{{ detail.body }}</pre>
                         </div>
                     </div>
                     <div v-else-if="legacyBody">
@@ -59,6 +72,7 @@
 
 <script>
 import { Modal } from "bootstrap";
+import Status from "./Status.vue";
 
 /**
  * Format headers as one "name: value" line each.
@@ -72,6 +86,9 @@ function formatHeaders(headers) {
 }
 
 export default {
+    components: {
+        Status,
+    },
     data() {
         return {
             modal: null,
@@ -82,27 +99,43 @@ export default {
         };
     },
     computed: {
-        sentTo() {
-            if (!this.detail.ip) {
-                return this.$t("httpDetailUnknown");
+        blocks() {
+            const blocks = [{ title: this.detail.peer ? this.$t("forkThisInstance") : "", detail: this.detail }];
+            if (this.detail.peer) {
+                blocks.push({
+                    title: this.$t("forkPeerCheck"),
+                    peer: this.detail.peer,
+                    detail: this.detail.peer.detail,
+                });
             }
-            const host = this.detail.ip.includes(":") ? `[${this.detail.ip}]` : this.detail.ip;
-            return this.detail.port ? `${host}:${this.detail.port}` : host;
-        },
-        requestHeaders() {
-            return formatHeaders(this.detail.request.headers);
-        },
-        responseHeaders() {
-            return formatHeaders(this.detail.response?.headers);
-        },
-        errorText() {
-            return [this.detail.error.code, this.detail.error.message].filter(Boolean).join(" ");
+            return blocks;
         },
     },
     mounted() {
         this.modal = new Modal(this.$refs.modal);
     },
     methods: {
+        /**
+         * Address the request was sent to.
+         * @param {object} detail Detail object
+         * @returns {string} Host and port, or "unknown"
+         */
+        sentTo(detail) {
+            if (!detail.ip) {
+                return this.$t("httpDetailUnknown");
+            }
+            const host = detail.ip.includes(":") ? `[${detail.ip}]` : detail.ip;
+            return detail.port ? `${host}:${detail.port}` : host;
+        },
+        requestHeaders(detail) {
+            return formatHeaders(detail.request.headers);
+        },
+        responseHeaders(detail) {
+            return formatHeaders(detail.response?.headers);
+        },
+        errorText(detail) {
+            return [detail.error.code, detail.error.message].filter(Boolean).join(" ");
+        },
         /**
          * Open the dialog and load the saved request and response of one heartbeat.
          * @param {number} monitorID Monitor ID
